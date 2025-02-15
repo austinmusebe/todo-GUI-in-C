@@ -2,6 +2,7 @@
 #include <GLFW/glfw3.h>
 #include <leif/leif.h>
 #include <string.h>
+#include <stdlib.h>
 
 typedef enum
 {
@@ -400,21 +401,39 @@ static void renderEntries()
 
 static void renderNewTask()
 {
+    printf("Entering renderNewTask\n");
+
     lf_push_font(&titlefont);
+    printf("Pushed titlefont\n");
+
     {
         LfUIElementProps props = lf_get_theme().text_props;
         props.margin_bottom = 15.0f;
         lf_push_style_props(props);
+        printf("Pushed text props\n");
+
         lf_text("Add a new task");
+        printf("Rendered 'Add a new task' text\n");
+
         lf_pop_font();
+        printf("Popped font\n");
     }
     lf_next_line();
+    printf("Moved to next line\n");
+
     {
         lf_push_font(&smallfont);
+        printf("Pushed smallfont\n");
+
         lf_text("description");
+        printf("Rendered 'description' text\n");
+
         lf_pop_font();
+        printf("Popped font\n");
 
         lf_next_line();
+        printf("Moved to next line\n");
+
         LfUIElementProps props = lf_get_theme().inputfield_props;
         props.padding = 15.0f;
         props.border_width = 0.0f;
@@ -426,23 +445,36 @@ static void renderNewTask()
         props.corner_radius = 2.5f;
         props.margin_bottom = 10.0f;
         lf_push_style_props(props);
+        printf("Pushed input field props\n");
+
         lf_input_text(&newTaskInput);
+        printf("Rendered input text\n");
+
         lf_pop_style_props();
+        printf("Popped style props\n");
     }
     lf_next_line();
+    printf("Moved to next line\n");
 
     static int32_t selectedPriority = -1;
     {
         lf_push_font(&smallfont);
+        printf("Pushed smallfont\n");
+
         lf_text("priority");
+        printf("Rendered 'priority' text\n");
+
         lf_pop_font();
+        printf("Popped font\n");
 
         lf_next_line();
+        printf("Moved to next line\n");
+
         static const char *items[3] = {
             "low",
             "medium",
             "high",
-        }; // not sure if i can leave a trailing comma here
+        };
 
         static bool opened = false;
         LfUIElementProps props = lf_get_theme().button_props;
@@ -451,13 +483,18 @@ static void renderNewTask()
         props.border_width = 0.0f;
         props.corner_radius = 5.0f;
         lf_push_style_props(props);
+        printf("Pushed dropdown menu props\n");
+
         lf_dropdown_menu(items, "priority", 3, 200, 80, &selectedPriority, &opened);
+        printf("Rendered dropdown menu\n");
+
         lf_pop_style_props();
+        printf("Popped style props\n");
     }
 
     {
-        // add new task button
-        bool form_complete = (strlen(newTaskInput.buf) && selectedPriority != -1); // strlen will return a 1 if not empty since it's a char
+        // Add new task button
+        bool form_complete = (strlen(newTaskInput.buf) && selectedPriority != -1);
         const char *text = "Add";
         const float width = 150.0f;
 
@@ -468,40 +505,78 @@ static void renderNewTask()
         props.border_width = 0.0f;
         props.color = !form_complete ? (LfColor){80, 80, 80, 255} : (LfColor){65, 167, 204, 255};
         lf_push_style_props(props);
+        printf("Pushed button props\n");
+
         lf_set_line_should_overflow(false);
+        printf("Set line should overflow to false\n");
+
         lf_set_ptr_x_absolute(winw - (width + props.padding * 2.0f) - WIN_MARGIN);
+        printf("Set pointer X position\n");
+
         lf_set_ptr_y_absolute(winh - (lf_button_dimension(text).y + props.padding * 2.0f) - WIN_MARGIN);
+        printf("Set pointer Y position\n");
+
         if (((lf_button_fixed(text, width, -1) == LF_CLICKED) || lf_key_went_down(GLFW_KEY_ENTER)) && form_complete)
         {
+            printf("Adding new task\n");
+
             task_entry *entry = (task_entry *)malloc(sizeof(*entry));
+            if (!entry)
+            {
+                printf("Memory allocation failed for entry.\n");
+                return;
+            }
+
             entry->priority = selectedPriority;
             entry->completed = false;
             entry->date = get_command_output("date +'%d,%m,%Y, %H:%M'");
             if (!entry->date)
             {
                 printf("Failed to get date.\n");
-                free(entry->desc);
                 free(entry);
                 return;
             }
 
+            printf("newTaskInputBuf: %s\n", newTaskInputBuf);
             char *new_desc = malloc(strlen(newTaskInputBuf) + 1);
+            if (!new_desc)
+            {
+                printf("Memory allocation failed for new_desc.\n");
+                free(entry->date);
+                free(entry);
+                return;
+            }
             strcpy(new_desc, newTaskInputBuf);
-
             entry->desc = new_desc;
+
+            if (numEntries >= 1024)
+            {
+                printf("Too many entries, cannot add more.\n");
+                free(entry->date);
+                free(entry->desc);
+                free(entry);
+                return;
+            }
             entries[numEntries++] = entry;
+
             memset(newTaskInputBuf, 0, 512);
             newTaskInput.cursor_index = 0;
             lf_input_field_unselect_all(&newTaskInput);
             sortEntries();
             serialiseTodoList("./tododata.bin");
+            printf("New task added successfully\n");
         }
         lf_set_line_should_overflow(true);
+        printf("Set line should overflow to true\n");
+
         lf_pop_style_props();
+        printf("Popped style props\n");
     }
     lf_next_line();
+    printf("Moved to next line\n");
+
     {
-        // back button
+        // Back button
         LfUIElementProps props = lf_get_theme().button_props;
         props.color = LF_NO_COLOR;
         props.border_width = 0.0f;
@@ -511,17 +586,31 @@ static void renderNewTask()
         props.margin_right = 0.0f;
         props.margin_bottom = 0.0f;
         lf_push_style_props(props);
+        printf("Pushed back button props\n");
+
         lf_set_line_should_overflow(false);
+        printf("Set line should overflow to false\n");
+
         LfTexture backbutton = (LfTexture){.id = backTexture.id, .width = 20, .height = 40};
         lf_set_ptr_y_absolute(winh - backbutton.height - WIN_MARGIN * 2.0f);
+        printf("Set pointer Y position for back button\n");
+
         lf_set_ptr_x_absolute(WIN_MARGIN);
+        printf("Set pointer X position for back button\n");
+
         if (lf_image_button(backbutton) == LF_CLICKED)
         {
             current_tab = TAB_DASHBOARD;
+            printf("Back button clicked\n");
         }
         lf_set_line_should_overflow(true);
+        printf("Set line should overflow to true\n");
+
         lf_pop_style_props();
+        printf("Popped style props\n");
     }
+
+    printf("Exiting renderNewTask\n");
 }
 
 int main()
