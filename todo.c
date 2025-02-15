@@ -38,7 +38,8 @@ static LfFont titlefont, smallfont;
 static entry_filter current_filter;
 static gui_tab current_tab;
 
-static task_entry *entries[1024];
+// static task_entry *entries[1024];
+static task_entry **entries = NULL;
 static uint32_t numEntries = 0;
 
 static LfTexture removeTexture, backTexture;
@@ -50,11 +51,11 @@ static void serialiseTodoEntry(FILE *file, task_entry *entry)
 {
     fwrite(&entry->completed, sizeof(bool), 1, file);
 
-    size_t desclen = strlen(entry->desc + 1); // +1 for the null terminator
+    size_t desclen = strlen(entry->desc) + 1; // +1 for the null terminator
     fwrite(&desclen, sizeof(size_t), 1, file);
     fwrite(entry->desc, sizeof(char), desclen, file);
 
-    size_t datelen = strlen(entry->date + 1); // +1 for the null terminator
+    size_t datelen = strlen(entry->date) + 1; // +1 for the null terminator
     fwrite(&datelen, sizeof(size_t), 1, file);
     fwrite(entry->date, sizeof(char), datelen, file);
 
@@ -94,6 +95,7 @@ task_entry *deserialiseTodoEntry(FILE *file)
     if (!entry->desc)
     {
         free(entry);
+        printf("Memory allocation failed for entry->desc\n");
         return NULL;
     }
     if (fread(entry->desc, sizeof(char), desclen, file) != desclen)
@@ -115,6 +117,7 @@ task_entry *deserialiseTodoEntry(FILE *file)
     {
         free(entry->desc);
         free(entry);
+        printf("Memory allocation failed for entry->date\n");
         return NULL;
     }
     if (fread(entry->date, sizeof(char), datelen, file) != datelen)
@@ -140,9 +143,11 @@ void deserialise_todo_list(const char *filename)
     FILE *file = fopen(filename, "rb");
     if (!file)
     {
-        file = fopen(filename, "w");
-        fclose(file);
-        file = fopen(filename, "rb");
+        printf("Failed to open data file.\n");
+        return;
+        // file = fopen(filename, "w");
+        // fclose(file);
+        // file = fopen(filename, "rb");
     }
     task_entry *entry;
     while ((entry = deserialiseTodoEntry(file)) != NULL)
@@ -466,17 +471,28 @@ static void renderNewTask()
         lf_set_line_should_overflow(false);
         lf_set_ptr_x_absolute(winw - (width + props.padding * 2.0f) - WIN_MARGIN);
         lf_set_ptr_y_absolute(winh - (lf_button_dimension(text).y + props.padding * 2.0f) - WIN_MARGIN);
-        if (lf_button_fixed(text, width, -1) == LF_CLICKED && form_complete)
+        if (((lf_button_fixed(text, width, -1) == LF_CLICKED) || lf_key_went_down(GLFW_KEY_ENTER)) && form_complete)
         {
             task_entry *entry = (task_entry *)malloc(sizeof(*entry));
             entry->priority = selectedPriority;
             entry->completed = false;
             entry->date = get_command_output("date +'%d,%m,%Y, %H:%M'");
+            if (!entry->date)
+            {
+                printf("Failed to get date.\n");
+                free(entry->desc);
+                free(entry);
+                return;
+            }
+
             char *new_desc = malloc(strlen(newTaskInputBuf) + 1);
             strcpy(new_desc, newTaskInputBuf);
+
             entry->desc = new_desc;
             entries[numEntries++] = entry;
             memset(newTaskInputBuf, 0, 512);
+            newTaskInput.cursor_index = 0;
+            lf_input_field_unselect_all(&newTaskInput);
             sortEntries();
             serialiseTodoList("./tododata.bin");
         }
@@ -517,8 +533,10 @@ int main()
     glfwMakeContextCurrent(window);
     lf_init_glfw(winw, winh, window);
     LfTheme theme = lf_get_theme();
+    theme.scrollbar_props.corner_radius = 2;
     theme.div_props.color = LF_NO_COLOR;
     lf_set_theme(theme);
+
     titlefont = lf_load_font("./fonts/inter-bold.ttf", 40);
     smallfont = lf_load_font("./fonts/inter.ttf", 20);
 
@@ -545,23 +563,20 @@ int main()
                      true);
 
         switch (current_tab)
-        case TAB_DASHBOARD:
         {
+        case TAB_DASHBOARD:
             rendertopbar();
             lf_next_line();
-
             renderFilters();
             lf_next_line();
-
             renderEntries();
             break;
         case TAB_NEW_TASK:
-        {
             renderNewTask();
-        }
+            break;
         }
 
-            lf_div_end();
+        lf_div_end();
         lf_end();
 
         glfwPollEvents();
